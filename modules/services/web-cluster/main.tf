@@ -1,12 +1,21 @@
+locals {
+  http_port    = 80
+  any_port     = 0
+  any_protocol = "-1"
+  tcp_protocol = "tcp"
+  all_ips      = ["0.0.0.0/0"]
+}
+
+
 resource "aws_launch_template" "example" {
-  image_id        = data.aws_ami_ids.amz_linuxs.ids[0]
-  instance_type   = var.instance_type
+  image_id      = data.aws_ami_ids.amz_linuxs.ids[0]
+  instance_type = var.instance_type
   network_interfaces {
     security_groups = [aws_security_group.instance.id]
   }
-  
+
   # Render the User Data script as a template
-  user_data = base64encode(templatefile("user-data.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
     server_port = var.server_port
     db_address  = data.terraform_remote_state.db.outputs.address
     db_port     = data.terraform_remote_state.db.outputs.port
@@ -20,11 +29,11 @@ resource "aws_launch_template" "example" {
 
 resource "aws_autoscaling_group" "example" {
   launch_template {
-    id = aws_launch_template.example.id
+    id      = aws_launch_template.example.id
     version = "$Latest"
   }
 
-  vpc_zone_identifier  = data.aws_subnets.default.ids
+  vpc_zone_identifier = data.aws_subnets.default.ids
 
   target_group_arns = [aws_lb_target_group.asg.arn]
   health_check_type = "ELB"
@@ -65,12 +74,12 @@ data "aws_ami_ids" "amz_linuxs" {
   owners = ["amazon"]
 
   filter {
-    name = "name"
+    name   = "name"
     values = ["amzn2-ami-kernel-5.10-hvm-2.0.*"]
   }
 
   filter {
-    name = "architecture"
+    name   = "architecture"
     values = ["x86_64"]
   }
 }
@@ -82,7 +91,7 @@ data "terraform_remote_state" "db" {
     bucket = var.db_remote_state_bucket
     key    = var.db_remote_state_key
 
-    region = "ap-southeast-2"
+    region  = "ap-southeast-2"
     profile = "cst-test"
 
   }
@@ -90,7 +99,7 @@ data "terraform_remote_state" "db" {
 
 resource "aws_lb" "example" {
 
-  name               = "${var.cluster_name}-alb"
+  name = "${var.cluster_name}-alb"
 
   load_balancer_type = "application"
   subnets            = data.aws_subnets.default.ids
@@ -99,7 +108,7 @@ resource "aws_lb" "example" {
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.example.arn
-  port              = 80
+  port              = local.http_port
   protocol          = "HTTP"
 
   # By default, return a simple 404 page
@@ -150,23 +159,26 @@ resource "aws_lb_listener_rule" "asg" {
 }
 
 resource "aws_security_group" "alb" {
-
   name = "${var.cluster_name}-alb"
-
-  # Allow inbound HTTP requests
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow all outbound requests
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 }
 
+# Allow inbound HTTP requests
+resource "aws_security_group_rule" "alb_allow_http_in" {
+  security_group_id = aws_security_group.alb.id
+  type              = "ingress"  
+  from_port         = local.http_port
+  to_port           = local.http_port
+  protocol          = local.tcp_protocol
+  cidr_blocks       = local.all_ips
+
+}
+
+# Allow all outbound requests
+resource "aws_security_group_rule" "alb_allow_all_out" {
+  security_group_id = aws_security_group.alb.id
+  type              = "egress"
+  from_port   = local.any_port
+  to_port     = local.any_port
+  protocol    = local.any_protocol
+  cidr_blocks = local.all_ips
+}
