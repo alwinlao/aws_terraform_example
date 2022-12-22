@@ -1,3 +1,9 @@
+#### TERRAFORM MODULES ####
+modules/
+
+
+
+
 #### TERRAFORM ####
 # Local .terraform directories
 **/.terraform/*

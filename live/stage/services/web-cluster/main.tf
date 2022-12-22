@@ -10,7 +10,8 @@ provider "aws" {
 }
 
 module "web_cluster" {
-  source = "github.com/alwinlao/aws_terraform_modules//services/web-cluster?ref=v0.0.1"
+  #source = "github.com/alwinlao/aws_terraform_modules//services/web-cluster?ref=v0.0.1"
+  source = "../../../../modules/services/web-cluster"
   cluster_name = "webservers-stage"
   instance_type = "t2.micro"
   min_size = 2
